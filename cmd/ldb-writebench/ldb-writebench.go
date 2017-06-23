@@ -15,20 +15,25 @@ import (
 )
 
 const (
-	defSize        = 500 * 1024 * 1024
-	defDataSize    = 100
 	keySize        = 32
 	reportInterval = 1 * time.Second
 )
 
 func main() {
 	test := flag.String("test", "", "test to run, one of "+strings.Join(testnames(), ", "))
+	sizeflag := flag.String("size", "500mb", "amount of data to write")
+	datasizeflag := flag.String("datasize", "100b", "size of each value")
 	env := new(bench.Env)
 	flag.StringVar(&env.Dir, "dir", "", "test directory")
-	flag.IntVar(&env.Size, "size", defSize, "amount of data to write (bytes)")
-	flag.IntVar(&env.DataSize, "datasize", defDataSize, "size of each value (bytes)")
 	flag.Parse()
 
+	var err error
+	if env.Size, err = bench.ParseSize(*sizeflag); err != nil {
+		log.Fatal("-size: ", err)
+	}
+	if env.DataSize, err = bench.ParseSize(*datasizeflag); err != nil {
+		log.Fatal("-datasize: ", err)
+	}
 	if env.Dir == "" {
 		dir, err := ioutil.TempDir("", "ldb-writebench")
 		if err != nil {
