@@ -50,6 +50,7 @@ func main() {
 	for _, name := range run {
 		if err := runTest(*logdirflag, *dirflag, name, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
+			anyErr = true
 		}
 	}
 	if anyErr {
