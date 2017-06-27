@@ -12,7 +12,7 @@ You can run benchmarks with `ldb-writebench`:
 
 Plot the result with `ldb-benchplot`:
 
-    ldb-benchplot -out 10gb.svg datasets/mymachine-10gb
+    ldb-benchplot -out 10gb.svg datasets/mymachine-10gb/*.json
 
 LevelDB databases are left on disk for inspection. You can remove them using
 
