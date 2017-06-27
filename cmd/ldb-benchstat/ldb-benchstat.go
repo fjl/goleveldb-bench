@@ -24,7 +24,7 @@ func main() {
 			totalSize += ev.Delta
 		}
 		meanBPS, stdBPS := stat.MeanStdDev(bps, nil)
-		fmt.Println("--", r.Name)
+		fmt.Printf("-- %s (%d events)", r.Name, len(r.Events))
 		fmt.Printf(" total time: %.4fs\n", totalTime)
 		fmt.Printf(" total size: %d bytes\n", totalSize)
 		fmt.Printf("  mean mb/s: %.3f (+- %.3f)\n", meanBPS/1024/1024, stdBPS/1024/1024)
