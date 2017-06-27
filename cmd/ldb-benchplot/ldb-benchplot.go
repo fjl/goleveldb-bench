@@ -32,6 +32,27 @@ func main() {
 	}
 }
 
+// reduceEvents aggregates progress events so there are ~n total events.
+// This smoothes out the line in the plot.
+func reduceEvents(events []bench.Progress, n int) []bench.Progress {
+	group := len(events) / n
+	if group <= 1 || len(events) == 0 {
+		return events
+	}
+	grouped := make([]bench.Progress, 0, n)
+	for i, ev := range events {
+		if i%group == 0 {
+			grouped = append(grouped, bench.Progress{})
+		}
+		end := len(grouped) - 1
+		grouped[end].Delta += ev.Delta
+		grouped[end].Duration += ev.Duration
+		grouped[end].Written = ev.Written
+	}
+	return grouped
+}
+
+// plotBPS adds BPS vs. database size plots for all reports.
 func plotBPS(plt *plot.Plot, reports []bench.Report) {
 	plt.X.Tick.Marker = megabyteTicks{unit: "mb"}
 	plt.X.Label.Text = "database size"
@@ -45,7 +66,8 @@ func plotBPS(plt *plot.Plot, reports []bench.Report) {
 			log.Print("Warning: report %s has 0 progress events", r.Name)
 			continue
 		}
-		l, err := plotter.NewLine(bpsLine(r.Events))
+		evs := reduceEvents(r.Events, 400)
+		l, err := plotter.NewLine(bpsLine(evs))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -54,6 +76,18 @@ func plotBPS(plt *plot.Plot, reports []bench.Report) {
 		plt.Legend.Add(r.Name, l)
 		i++
 	}
+}
+
+// bpsLine plots X = db size against Y = bytes per second written.
+type bpsLine []bench.Progress
+
+func (l bpsLine) Len() int {
+	return len(l)
+}
+
+func (l bpsLine) XY(i int) (float64, float64) {
+	x := float64(l[i].Written)
+	return x, l[i].BPS()
 }
 
 // megabyteTicks emits axis labels corresponding to megabytes written.
@@ -72,16 +106,4 @@ func (mt megabyteTicks) Ticks(min, max float64) (t []plot.Tick) {
 
 func nextPowerOfTwo(f float64) float64 {
 	return math.Pow(2, math.Ceil(math.Log2(f)))
-}
-
-// bpsLine plots X = db size against Y = bytes per second written.
-type bpsLine []bench.Progress
-
-func (l bpsLine) Len() int {
-	return len(l)
-}
-
-func (l bpsLine) XY(i int) (float64, float64) {
-	x := float64(l[i].Written)
-	return x, l[i].BPS()
 }
