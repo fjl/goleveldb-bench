@@ -20,6 +20,9 @@ func main() {
 		out    = flag.String("out", "", "output filename")
 	)
 	flag.Parse()
+	if *out == "" {
+		log.Fatal("-out is required")
+	}
 	reports := bench.MustReadReports(flag.Args())
 
 	p, err := plot.New()
@@ -63,7 +66,7 @@ func plotBPS(plt *plot.Plot, reports []bench.Report) {
 	i := 0
 	for _, r := range reports {
 		if len(r.Events) == 0 {
-			log.Print("Warning: report %s has 0 progress events", r.Name)
+			log.Printf("Warning: report %s has 0 progress events", r.Name)
 			continue
 		}
 		evs := reduceEvents(r.Events, 400)
