@@ -2,58 +2,75 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
-	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-const (
-	keySize        = 32
-	reportInterval = 1 * time.Second
-)
-
 func main() {
-	test := flag.String("test", "", "test to run, one of "+strings.Join(testnames(), ", "))
-	sizeflag := flag.String("size", "500mb", "amount of data to write")
-	datasizeflag := flag.String("datasize", "100b", "size of each value")
-	env := new(bench.Env)
-	flag.StringVar(&env.Dir, "dir", "", "test directory")
+	var (
+		testflag     = flag.String("test", "", "tests to run ("+strings.Join(testnames(), ", ")+")")
+		sizeflag     = flag.String("size", "500mb", "total amount of value data to write")
+		datasizeflag = flag.String("valuesize", "100b", "size of each value")
+		keysizeflag  = flag.String("keysize", "32b", "size of each key")
+		dirflag      = flag.String("dir", ".", "test database directory")
+		logdirflag   = flag.String("logdir", "", "test log output directory")
+		run          []string
+		cfg          bench.Config
+		err          error
+	)
 	flag.Parse()
 
-	var err error
-	if env.Size, err = bench.ParseSize(*sizeflag); err != nil {
+	for _, t := range strings.Split(*testflag, ",") {
+		if tests[t] == nil {
+			log.Fatalf("unknown test %q", t)
+		}
+		run = append(run, t)
+	}
+	if len(run) == 0 {
+		log.Fatal("no tests to run, use -test to select tests")
+	}
+	if cfg.Size, err = bench.ParseSize(*sizeflag); err != nil {
 		log.Fatal("-size: ", err)
 	}
-	if env.DataSize, err = bench.ParseSize(*datasizeflag); err != nil {
+	if cfg.DataSize, err = bench.ParseSize(*datasizeflag); err != nil {
 		log.Fatal("-datasize: ", err)
 	}
-	if env.Dir == "" {
-		dir, err := ioutil.TempDir("", "ldb-writebench")
-		if err != nil {
-			log.Fatal("can't make temp dir:", err)
-		}
-		env.Dir = dir
-		defer os.RemoveAll(dir)
+	if cfg.KeySize, err = bench.ParseSize(*keysizeflag); err != nil {
+		log.Fatal("-datasize: ", err)
 	}
 
-	fn := tests[*test]
-	if fn == nil {
-		log.Fatalf("unknown test %q", *test)
+	anyErr := false
+	for _, name := range run {
+		if err := runTest(*logdirflag, *dirflag, name, cfg); err != nil {
+			log.Printf("test %q failed: %v", name, err)
+		}
 	}
-	if err := fn.Benchmark(env); err != nil {
-		return
+	if anyErr {
+		log.Fatal("one ore more tests failed")
 	}
 }
 
+func runTest(logdir, dbdir, name string, cfg bench.Config) error {
+	logfile, err := os.Create(filepath.Join(logdir, name+".json"))
+	if err != nil {
+		return err
+	}
+	defer logfile.Close()
+	dbdir = filepath.Join(dbdir, "testdb-"+name)
+	log.Printf("== running %q", name)
+	env := bench.NewEnv(io.MultiWriter(logfile, os.Stdout), cfg)
+	return tests[name].Benchmark(dbdir, env)
+}
+
 type Benchmarker interface {
-	Benchmark(*bench.Env) error
+	Benchmark(dir string, env *bench.Env) error
 }
 
 var tests = map[string]Benchmarker{
@@ -74,48 +91,45 @@ func testnames() (n []string) {
 
 type seqWrite struct{}
 
-func (seqWrite) Benchmark(env *bench.Env) error {
-	db := env.OpenDB(nil)
-	data := make([]byte, env.DataSize)
-	env.Start()
-	written := 0
-	for ; written < env.Size; written += env.DataSize {
-		if err := db.Put(nextkey(), data, nil); err != nil {
+func (seqWrite) Benchmark(dir string, env *bench.Env) error {
+	db, err := leveldb.OpenFile(dir, nil)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	return env.Run(func(key, value []byte, lastCall bool) error {
+		if err := db.Put(key, value, nil); err != nil {
 			return err
 		}
-		env.Progress(written)
-	}
-	return db.Close()
+		env.Progress()
+		return nil
+	})
 }
 
 type batchWrite struct {
 	BatchSize int
 }
 
-func (b batchWrite) Benchmark(env *bench.Env) error {
-	db := env.OpenDB(nil)
-	data := make([]byte, env.DataSize)
-	env.Start()
-	written := 0
-	for ; written < env.Size; written += env.DataSize {
-		var batch leveldb.Batch
-		bsize := 0
-		for ; bsize < b.BatchSize && written+bsize < env.Size; bsize += env.DataSize {
-			batch.Put(nextkey(), data)
-		}
-		if err := db.Write(&batch, nil); err != nil {
-			return err
-		}
-		written += bsize
-		env.Progress(written)
+func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
+	db, err := leveldb.OpenFile(dir, nil)
+	if err != nil {
+		return err
 	}
-	return db.Close()
-}
+	defer db.Close()
 
-var keyrand = rand.New(rand.NewSource(0x1334))
-
-func nextkey() []byte {
-	k := make([]byte, keySize)
-	keyrand.Read(k)
-	return k
+	batch := new(leveldb.Batch)
+	bsize := 0
+	return env.Run(func(key, value []byte, lastCall bool) error {
+		batch.Put(key, value)
+		bsize += len(value)
+		if bsize >= b.BatchSize || lastCall {
+			if err := db.Write(batch, nil); err != nil {
+				return err
+			}
+			bsize = 0
+			batch.Reset()
+			env.Progress()
+		}
+		return nil
+	})
 }

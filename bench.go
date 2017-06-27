@@ -4,26 +4,32 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/aristanetworks/goarista/monotime"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-const emitInterval = 20 * 1024 // bytes
+const emitInterval = 500 * 1024 // bytes
+
+type Config struct {
+	Size     int `json:"size"`     // total size of values to write
+	KeySize  int `json:"keysize"`  // size of each key written
+	DataSize int `json:"datasize"` // size of each value written
+}
 
 type Env struct {
-	Size     int    `json:"size"`
-	DataSize int    `json:"datasize"`
-	Dir      string `json:"-"`
-
-	startTime, lastTime time.Duration
-	lastSize            int
-	out                 *json.Encoder
+	cfg Config
+	// generating keys and values
+	key, value []byte
+	rand       *rand.Rand
+	// reporting
+	startTime, lastTime  time.Duration
+	written, lastWritten int
+	out                  *json.Encoder
 }
 
 type Progress struct {
@@ -37,32 +43,49 @@ func (ev Progress) BPS() float64 {
 	return (float64(ev.Delta) / float64(ev.Duration)) * float64(time.Second)
 }
 
-func (env *Env) OpenDB(o *opt.Options) *leveldb.DB {
-	db, err := leveldb.OpenFile(env.Dir, o)
-	if err != nil {
-		log.Fatal("can't open database:", err)
+func NewEnv(output io.Writer, cfg Config) *Env {
+	return &Env{
+		cfg:   cfg,
+		out:   json.NewEncoder(output),
+		key:   make([]byte, cfg.KeySize),
+		value: make([]byte, cfg.DataSize),
 	}
-	return db
 }
 
-func (env *Env) Start() {
+// Run calls write repeatedly with randomly-filled key and value slices.
+// The write function should perform a database write and call Progress when
+// data has actually been flushed to disk.
+func (env *Env) Run(write func(key, value []byte, lastCall bool) error) error {
+	env.start()
+	for {
+		env.rand.Read(env.key)
+		env.rand.Read(env.value)
+		env.written += env.cfg.DataSize
+		end := env.written >= env.cfg.Size
+		err := write(env.key, env.value, end)
+		if err != nil || end {
+			return err
+		}
+	}
+}
+
+func (env *Env) start() {
+	env.written, env.lastWritten = 0, 0
+	env.rand = rand.New(rand.NewSource(0x1334))
 	env.startTime = mononow()
 	env.lastTime = env.startTime
-	env.out = json.NewEncoder(os.Stdout)
 }
 
-func (env *Env) Progress(written int) {
-	env.writeProgress(mononow(), written, false)
-}
-
-func (env *Env) writeProgress(now time.Duration, written int, force bool) {
+// Progress writes a JSON progress event to the environment's output writer.
+func (env *Env) Progress() {
+	now := mononow()
 	d := now - env.lastTime
-	dw := written - env.lastSize
-	if dw > 0 && (dw > emitInterval || force) {
-		p := Progress{Written: written, Delta: dw, Duration: d}
+	dw := env.written - env.lastWritten
+	if dw > 0 && dw > emitInterval {
+		p := Progress{Written: env.written, Delta: dw, Duration: d}
 		env.out.Encode(&p)
 		env.lastTime = now
-		env.lastSize = written
+		env.lastWritten = env.written
 	}
 }
 

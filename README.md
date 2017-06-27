@@ -7,9 +7,13 @@ compile:
 
 You can run benchmarks with `ldb-writebench`:
 
-    ldb-writebench -size 10gb -dir database-dir-1 -test nobatch > 10gb-nobatch.json
-    ldb-writebench -size 10gb -dir database-dir-2 -test batch-100kb > 10gb-batch-100kb.json
+    mkdir datasets/mymachine-10gb
+    ldb-writebench -size 10gb -logdir datasets/mymachine-10gb -test nobatch,batch-100kb
 
 Plot the result with `ldb-benchplot`:
 
-    ldb-benchplot -out 10gb.svg 10gb-nobatch.json 10gb-batch-100kb.json
+    ldb-benchplot -out 10gb.svg datasets/mymachine-10gb
+
+LevelDB databases are left on disk for inspection. You can remove them using
+
+    rm -r testdb-*
