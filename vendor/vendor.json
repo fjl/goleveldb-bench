@@ -135,7 +135,7 @@
 			"revisionTime": "2017-06-20T22:10:51Z"
 		},
 		{
-			"checksumSHA1": "p/mtvTd5N+oaWYbkxPuQ1p/+fkQ=",
+			"checksumSHA1": "tJuWuBfqLzkXKyARCZYqPR4py9s=",
 			"path": "github.com/gonum/plot/plotutil",
 			"revision": "680e9497a1885d45297d69f967da8e1f3c9c80a3",
 			"revisionTime": "2017-06-20T22:10:51Z"
@@ -159,7 +159,7 @@
 			"revisionTime": "2017-06-20T22:10:51Z"
 		},
 		{
-			"checksumSHA1": "xwJDiEVIejTZW1N6n7i0gvZ/k8s=",
+			"checksumSHA1": "kyBBMlmKghSR4p9G65hSSHJV3UY=",
 			"path": "github.com/gonum/plot/vg/fonts",
 			"revision": "680e9497a1885d45297d69f967da8e1f3c9c80a3",
 			"revisionTime": "2017-06-20T22:10:51Z"
@@ -285,7 +285,7 @@
 			"revisionTime": "2017-04-09T01:48:31Z"
 		},
 		{
-			"checksumSHA1": "WZqFyWo6r8KZodsU0doRvel37F0=",
+			"checksumSHA1": "ZEEyhXypFFC4N9ZiiQlgO5VjqU4=",
 			"path": "golang.org/x/image/draw",
 			"revision": "426cfd8eeb6e08ab1932954e09e3c2cb2bc6e36d",
 			"revisionTime": "2017-05-14T06:33:48Z"
