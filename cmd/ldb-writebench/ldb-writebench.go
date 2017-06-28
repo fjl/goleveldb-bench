@@ -11,6 +11,7 @@ import (
 
 	bench "github.com/fjl/goleveldb-bench"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 func main() {
@@ -75,11 +76,13 @@ type Benchmarker interface {
 }
 
 var tests = map[string]Benchmarker{
-	"nobatch":     seqWrite{},
-	"batch-50kb":  batchWrite{BatchSize: 50 * 1024},
-	"batch-100kb": batchWrite{BatchSize: 100 * 1024},
-	"batch-1mb":   batchWrite{BatchSize: 1024 * 1024},
-	"batch-5mb":   batchWrite{BatchSize: 5 * 1024 * 1024},
+	"nobatch":          seqWrite{},
+	"batch-100kb":      batchWrite{BatchSize: 100 * 1024},
+	"batch-1mb":        batchWrite{BatchSize: 1024 * 1024},
+	"batch-5mb":        batchWrite{BatchSize: 5 * 1024 * 1024},
+	"batch-notx-100kb": batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
+	"batch-notx-1mb":   batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
+	"batch-notx-5mb":   batchWrite{BatchSize: 5 * 1024 * 1024, DisableTx: true},
 }
 
 func testnames() (n []string) {
@@ -109,10 +112,11 @@ func (seqWrite) Benchmark(dir string, env *bench.Env) error {
 
 type batchWrite struct {
 	BatchSize int
+	DisableTx bool
 }
 
 func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
-	db, err := leveldb.OpenFile(dir, nil)
+	db, err := leveldb.OpenFile(dir, &opt.Options{DisableLargeBatchTransaction: b.DisableTx})
 	if err != nil {
 		return err
 	}
