@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aristanetworks/goarista/monotime"
@@ -26,10 +27,11 @@ type Env struct {
 	// generating keys and values
 	key, value []byte
 	rand       *rand.Rand
+	out        *json.Encoder
 	// reporting
+	mu                   sync.Mutex
 	startTime, lastTime  time.Duration
 	written, lastWritten int
-	out                  *json.Encoder
 }
 
 type Progress struct {
@@ -52,17 +54,18 @@ func NewEnv(output io.Writer, cfg Config) *Env {
 	}
 }
 
-// Run calls write repeatedly with randomly-filled key and value slices.
+// Run calls write repeatedly with random keys and values.
 // The write function should perform a database write and call Progress when
 // data has actually been flushed to disk.
-func (env *Env) Run(write func(key, value []byte, lastCall bool) error) error {
+func (env *Env) Run(write func(key, value string, lastCall bool) error) error {
 	env.start()
+	written := 0
 	for {
 		env.rand.Read(env.key)
 		env.rand.Read(env.value)
-		env.written += env.cfg.DataSize
-		end := env.written >= env.cfg.Size
-		err := write(env.key, env.value, end)
+		written += env.cfg.DataSize
+		end := written >= env.cfg.Size
+		err := write(string(env.key), string(env.value), end)
 		if err != nil || end {
 			return err
 		}
@@ -77,8 +80,11 @@ func (env *Env) start() {
 }
 
 // Progress writes a JSON progress event to the environment's output writer.
-func (env *Env) Progress() {
+func (env *Env) Progress(w int) {
 	now := mononow()
+	env.mu.Lock()
+	defer env.mu.Unlock()
+	env.written += w
 	d := now - env.lastTime
 	dw := env.written - env.lastWritten
 	if dw > 0 && dw > emitInterval {

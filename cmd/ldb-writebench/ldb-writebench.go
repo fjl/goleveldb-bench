@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io"
 	"log"
@@ -12,6 +13,7 @@ import (
 	bench "github.com/fjl/goleveldb-bench"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -76,13 +78,15 @@ type Benchmarker interface {
 }
 
 var tests = map[string]Benchmarker{
-	"nobatch":          seqWrite{},
-	"batch-100kb":      batchWrite{BatchSize: 100 * 1024},
-	"batch-1mb":        batchWrite{BatchSize: 1024 * 1024},
-	"batch-5mb":        batchWrite{BatchSize: 5 * 1024 * 1024},
-	"batch-notx-100kb": batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
-	"batch-notx-1mb":   batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
-	"batch-notx-5mb":   batchWrite{BatchSize: 5 * 1024 * 1024, DisableTx: true},
+	"nobatch":            seqWrite{},
+	"batch-100kb":        batchWrite{BatchSize: 100 * 1024},
+	"batch-1mb":          batchWrite{BatchSize: 1024 * 1024},
+	"batch-5mb":          batchWrite{BatchSize: 5 * 1024 * 1024},
+	"batch-notx-100kb":   batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
+	"batch-notx-1mb":     batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
+	"batch-notx-5mb":     batchWrite{BatchSize: 5 * 1024 * 1024, DisableTx: true},
+	"concurrent":         concurrentWrite{N: 8},
+	"concurrent-nomerge": concurrentWrite{N: 8, NoWriteMerge: true},
 }
 
 func testnames() (n []string) {
@@ -101,11 +105,11 @@ func (seqWrite) Benchmark(dir string, env *bench.Env) error {
 		return err
 	}
 	defer db.Close()
-	return env.Run(func(key, value []byte, lastCall bool) error {
-		if err := db.Put(key, value, nil); err != nil {
+	return env.Run(func(key, value string, lastCall bool) error {
+		if err := db.Put([]byte(key), []byte(value), nil); err != nil {
 			return err
 		}
-		env.Progress()
+		env.Progress(len(value))
 		return nil
 	})
 }
@@ -124,16 +128,66 @@ func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
 
 	batch := new(leveldb.Batch)
 	bsize := 0
-	return env.Run(func(key, value []byte, lastCall bool) error {
-		batch.Put(key, value)
+	return env.Run(func(key, value string, lastCall bool) error {
+		batch.Put([]byte(key), []byte(value))
 		bsize += len(value)
 		if bsize >= b.BatchSize || lastCall {
 			if err := db.Write(batch, nil); err != nil {
 				return err
 			}
+			env.Progress(bsize)
 			bsize = 0
 			batch.Reset()
-			env.Progress()
+		}
+		return nil
+	})
+}
+
+type kv struct{ k, v string }
+
+type concurrentWrite struct {
+	N            int
+	NoWriteMerge bool
+}
+
+func (b concurrentWrite) Benchmark(dir string, env *bench.Env) error {
+	db, err := leveldb.OpenFile(dir, nil)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	var (
+		write            = make(chan kv, b.N)
+		wopt             = &opt.WriteOptions{NoWriteMerge: b.NoWriteMerge}
+		outerCtx, cancel = context.WithCancel(context.Background())
+		eg, ctx          = errgroup.WithContext(outerCtx)
+	)
+	for i := 0; i < b.N; i++ {
+		eg.Go(func() error {
+			for {
+				select {
+				case kv := <-write:
+					if err := db.Put([]byte(kv.k), []byte(kv.v), wopt); err != nil {
+						return err
+					}
+					env.Progress(len(kv.v))
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		})
+	}
+
+	return env.Run(func(key, value string, lastCall bool) error {
+		select {
+		case write <- kv{k: key, v: value}:
+		case <-ctx.Done():
+			lastCall = true
+		}
+		if lastCall {
+			cancel()
+			return eg.Wait()
 		}
 		return nil
 	})
