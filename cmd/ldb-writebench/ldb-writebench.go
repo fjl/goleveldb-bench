@@ -80,12 +80,20 @@ type Benchmarker interface {
 var tests = map[string]Benchmarker{
 	"nobatch":        seqWrite{},
 	"nobatch-nosync": seqWrite{Options: opt.Options{NoSync: true}},
-	"batch-100kb":    batchWrite{BatchSize: 100 * 1024},
-	"batch-1mb":      batchWrite{BatchSize: 1024 * 1024},
-	"batch-5mb":      batchWrite{BatchSize: 5 * 1024 * 1024},
+	"batch-100kb":    batchWrite{BatchSize: 100 * opt.KiB},
+	"batch-1mb":      batchWrite{BatchSize: opt.MiB},
+	"batch-5mb":      batchWrite{BatchSize: 5 * opt.MiB},
 	"batch-100kb-nosync": batchWrite{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true},
+	},
+	"batch-100kb-largetable": batchWrite{
+		BatchSize: 100 * 1024,
+		Options:   opt.Options{CompactionTableSize: 128 * opt.MiB},
+	},
+	"batch-100kb-largetable-nosync": batchWrite{
+		BatchSize: 100 * 1024,
+		Options:   opt.Options{NoSync: true, CompactionTableSize: 128 * opt.MiB},
 	},
 	"batch-notx-100kb": batchWrite{
 		BatchSize: 1024 * 1024,
