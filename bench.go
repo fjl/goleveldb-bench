@@ -2,6 +2,7 @@ package bench
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"math/rand"
@@ -20,6 +21,9 @@ type Config struct {
 	Size     int `json:"size"`     // total size of values to write
 	KeySize  int `json:"keysize"`  // size of each key written
 	DataSize int `json:"datasize"` // size of each value written
+
+	LogPercent bool   `json:"-"`
+	TestName   string `json:"-"`
 }
 
 type Env struct {
@@ -32,6 +36,7 @@ type Env struct {
 	mu                   sync.Mutex
 	startTime, lastTime  time.Duration
 	written, lastWritten int
+	lastPercent          int
 }
 
 type Progress struct {
@@ -90,8 +95,20 @@ func (env *Env) Progress(w int) {
 	if dw > 0 && dw > emitInterval {
 		p := Progress{Written: env.written, Delta: dw, Duration: d}
 		env.out.Encode(&p)
+		env.logPercentage()
 		env.lastTime = now
 		env.lastWritten = env.written
+	}
+}
+
+func (env *Env) logPercentage() {
+	if !env.cfg.LogPercent {
+		return
+	}
+	pct := int((float64(env.written) / float64(env.cfg.Size)) * 100)
+	if pct > env.lastPercent {
+		fmt.Printf("%3d%%  %s\n", pct, env.cfg.TestName)
+		env.lastPercent = pct
 	}
 }
 
