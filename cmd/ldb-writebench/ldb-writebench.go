@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,6 +49,7 @@ func main() {
 	if cfg.KeySize, err = bench.ParseSize(*keysizeflag); err != nil {
 		log.Fatal("-datasize: ", err)
 	}
+	cfg.LogPercent = true
 
 	anyErr := false
 	for _, name := range run {
@@ -68,13 +68,14 @@ func main() {
 }
 
 func runTest(logdir, dbdir, name string, cfg bench.Config) error {
+	cfg.TestName = name
 	logfile, err := os.Create(filepath.Join(logdir, name+".json"))
 	if err != nil {
 		return err
 	}
 	defer logfile.Close()
 	log.Printf("== running %q", name)
-	env := bench.NewEnv(io.MultiWriter(logfile, os.Stdout), cfg)
+	env := bench.NewEnv(logfile, cfg)
 	return tests[name].Benchmark(dbdir, env)
 }
 
