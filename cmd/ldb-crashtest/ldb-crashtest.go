@@ -117,17 +117,6 @@ func checkDB(dbdir string) error {
 	return checkErr
 }
 
-// writer is the main function of the child process.
-func writer() {
-	if len(os.Args) != 4 {
-		log.Fatal("invalid number of arguments")
-	}
-	dbdir, name := os.Args[2], os.Args[3]
-	if err := tests[name].test(dbdir); err != nil {
-		log.Fatal(err)
-	}
-}
-
 // iterateTestKeys calls fn with keys and values until it returns true.
 // The keys and values are 32-byte values.
 func iterateTestKeys(fn func(i uint64, k, v []byte) bool) {
@@ -146,8 +135,18 @@ func iterateTestKeys(fn func(i uint64, k, v []byte) bool) {
 	}
 }
 
-// Several modes of writing can be selected.
+// writer is the main function of the child process.
+func writer() {
+	if len(os.Args) != 4 {
+		log.Fatal("invalid number of arguments")
+	}
+	dbdir, name := os.Args[2], os.Args[3]
+	if err := tests[name].test(dbdir); err != nil {
+		log.Fatal(err)
+	}
+}
 
+// These are the different write modes.
 var tests = map[string]tester{
 	"seq":          seqWrite{sync: true},
 	"seq-nosync":   seqWrite{sync: false},
