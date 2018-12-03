@@ -78,13 +78,27 @@ type Benchmarker interface {
 }
 
 var tests = map[string]Benchmarker{
-	"nobatch":            seqWrite{},
-	"batch-100kb":        batchWrite{BatchSize: 100 * 1024},
-	"batch-1mb":          batchWrite{BatchSize: 1024 * 1024},
-	"batch-5mb":          batchWrite{BatchSize: 5 * 1024 * 1024},
-	"batch-notx-100kb":   batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
-	"batch-notx-1mb":     batchWrite{BatchSize: 1024 * 1024, DisableTx: true},
-	"batch-notx-5mb":     batchWrite{BatchSize: 5 * 1024 * 1024, DisableTx: true},
+	"nobatch":        seqWrite{},
+	"nobatch-nosync": seqWrite{Options: opt.Options{NoSync: true}},
+	"batch-100kb":    batchWrite{BatchSize: 100 * 1024},
+	"batch-1mb":      batchWrite{BatchSize: 1024 * 1024},
+	"batch-5mb":      batchWrite{BatchSize: 5 * 1024 * 1024},
+	"batch-100kb-nosync": batchWrite{
+		BatchSize: 100 * 1024,
+		Options:   opt.Options{NoSync: true},
+	},
+	"batch-notx-100kb": batchWrite{
+		BatchSize: 1024 * 1024,
+		Options:   opt.Options{DisableLargeBatchTransaction: true},
+	},
+	"batch-notx-1mb": batchWrite{
+		BatchSize: 1024 * 1024,
+		Options:   opt.Options{DisableLargeBatchTransaction: true},
+	},
+	"batch-notx-5mb": batchWrite{
+		BatchSize: 5 * 1024 * 1024,
+		Options:   opt.Options{DisableLargeBatchTransaction: true},
+	},
 	"concurrent":         concurrentWrite{N: 8},
 	"concurrent-nomerge": concurrentWrite{N: 8, NoWriteMerge: true},
 }
@@ -97,10 +111,12 @@ func testnames() (n []string) {
 	return n
 }
 
-type seqWrite struct{}
+type seqWrite struct {
+	Options opt.Options
+}
 
-func (seqWrite) Benchmark(dir string, env *bench.Env) error {
-	db, err := leveldb.OpenFile(dir, nil)
+func (b seqWrite) Benchmark(dir string, env *bench.Env) error {
+	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
 	}
@@ -115,12 +131,12 @@ func (seqWrite) Benchmark(dir string, env *bench.Env) error {
 }
 
 type batchWrite struct {
+	Options   opt.Options
 	BatchSize int
-	DisableTx bool
 }
 
 func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
-	db, err := leveldb.OpenFile(dir, &opt.Options{DisableLargeBatchTransaction: b.DisableTx})
+	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
 	}
@@ -146,12 +162,13 @@ func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
 type kv struct{ k, v string }
 
 type concurrentWrite struct {
+	Options      opt.Options
 	N            int
 	NoWriteMerge bool
 }
 
 func (b concurrentWrite) Benchmark(dir string, env *bench.Env) error {
-	db, err := leveldb.OpenFile(dir, nil)
+	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
 	}
