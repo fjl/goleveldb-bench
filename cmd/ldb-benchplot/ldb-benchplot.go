@@ -5,32 +5,40 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
-	"github.com/gonum/plot"
-	"github.com/gonum/plot/plotter"
 	"github.com/gonum/plot/plotutil"
-	"github.com/gonum/plot/vg"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 )
 
 func main() {
 	var (
-		width  = flag.Int("width", 15, "with of plot in cm")
-		height = flag.Int("height", 10, "height of plot in cm")
-		out    = flag.String("out", "", "output filename")
+		width    = flag.Int("width", 15, "with of plot in cm")
+		height   = flag.Int("height", 10, "height of plot in cm")
+		plotType = flag.String("plot", "bps", "type of plot (bps, abstime)")
+		out      = flag.String("out", "", "output filename")
 	)
 	flag.Parse()
 	if *out == "" {
 		log.Fatal("-out is required")
 	}
 	reports := bench.MustReadReports(flag.Args())
-
-	p, err := plot.New()
+	plt, err := plot.New()
 	if err != nil {
 		log.Fatal(err)
 	}
-	plotBPS(p, reports)
-	if err := p.Save(vg.Length(*width)*vg.Centimeter, vg.Length(*height)*vg.Centimeter, *out); err != nil {
+	switch *plotType {
+	case "bps":
+		plotBPS(plt, reports)
+	case "abstime":
+		plotAbsTime(plt, reports)
+	default:
+		log.Fatalf("unknown plot type %q", *plotType)
+	}
+	if err := plt.Save(vg.Length(*width)*vg.Centimeter, vg.Length(*height)*vg.Centimeter, *out); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -59,38 +67,72 @@ func reduceEvents(events []bench.Progress, n int) []bench.Progress {
 func plotBPS(plt *plot.Plot, reports []bench.Report) {
 	plt.X.Tick.Marker = megabyteTicks{unit: "mb"}
 	plt.X.Label.Text = "database size"
-	// plt.Y.Scale = plot.LogScale{}
 	plt.Y.Label.Text = "write speed"
 	plt.Y.Tick.Marker = megabyteTicks{unit: "mb/s"}
+	addPlots(plt, reports, toBPSPlot)
+}
 
-	i := 0
-	for _, r := range reports {
+// plotAbsTime adds time/size plots for all reports.
+func plotAbsTime(plt *plot.Plot, reports []bench.Report) {
+	plt.X.Label.Text = "time (s)"
+	plt.Y.Label.Text = "database size"
+	plt.Y.Tick.Marker = megabyteTicks{unit: "mb"}
+	addPlots(plt, reports, toAbsTimePlot)
+}
+
+type xyFunc func([]bench.Progress) plotter.XYer
+
+func addPlots(plt *plot.Plot, reports []bench.Report, toXY xyFunc) {
+	for i, r := range reports {
 		if len(r.Events) == 0 {
 			log.Printf("Warning: report %s has 0 progress events", r.Name)
 			continue
 		}
 		evs := reduceEvents(r.Events, 400)
-		l, err := plotter.NewLine(bpsLine(evs))
+		l, err := plotter.NewLine(toXY(evs))
 		if err != nil {
 			log.Fatal(err)
 		}
 		l.Color = plotutil.Color(i)
 		plt.Add(l)
 		plt.Legend.Add(r.Name, l)
-		i++
 	}
 }
 
-// bpsLine plots X = db size against Y = bytes per second written.
-type bpsLine []bench.Progress
+// bpsPlot plots X = db size against Y = bytes per second written.
+type bpsPlot []bench.Progress
 
-func (l bpsLine) Len() int {
-	return len(l)
+func toBPSPlot(events []bench.Progress) plotter.XYer {
+	return bpsPlot(events)
 }
 
-func (l bpsLine) XY(i int) (float64, float64) {
-	x := float64(l[i].Written)
-	return x, l[i].BPS()
+func (p bpsPlot) Len() int {
+	return len(p)
+}
+
+func (p bpsPlot) XY(i int) (float64, float64) {
+	x := float64(p[i].Written)
+	return x, p[i].BPS()
+}
+
+// absTimePlot plots X = time against Y = bytes written.
+type absTimePlot []bench.Progress
+
+func toAbsTimePlot(events []bench.Progress) plotter.XYer {
+	for i := range events {
+		if i > 0 {
+			events[i].Duration += events[i-1].Duration
+		}
+	}
+	return absTimePlot(events)
+}
+
+func (p absTimePlot) Len() int {
+	return len(p)
+}
+
+func (p absTimePlot) XY(i int) (float64, float64) {
+	return float64(p[i].Duration / time.Second), float64(p[i].Written)
 }
 
 // megabyteTicks emits axis labels corresponding to megabytes written.
