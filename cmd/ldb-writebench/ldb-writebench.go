@@ -24,9 +24,11 @@ func main() {
 		keysizeflag  = flag.String("keysize", "32b", "size of each key")
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", "", "test log output directory")
-		run          []string
-		cfg          bench.Config
-		err          error
+		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
+
+		run []string
+		cfg bench.Config
+		err error
 	)
 	flag.Parse()
 
@@ -51,9 +53,13 @@ func main() {
 
 	anyErr := false
 	for _, name := range run {
-		if err := runTest(*logdirflag, *dirflag, name, cfg); err != nil {
+		dbdir := filepath.Join(*dirflag, "testdb-"+name)
+		if err := runTest(*logdirflag, dbdir, name, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
 			anyErr = true
+		}
+		if *deletedbflag {
+			os.RemoveAll(dbdir)
 		}
 	}
 	if anyErr {
@@ -67,7 +73,6 @@ func runTest(logdir, dbdir, name string, cfg bench.Config) error {
 		return err
 	}
 	defer logfile.Close()
-	dbdir = filepath.Join(dbdir, "testdb-"+name)
 	log.Printf("== running %q", name)
 	env := bench.NewEnv(io.MultiWriter(logfile, os.Stdout), cfg)
 	return tests[name].Benchmark(dbdir, env)
