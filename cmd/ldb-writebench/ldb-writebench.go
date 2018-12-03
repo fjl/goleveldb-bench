@@ -87,23 +87,31 @@ var tests = map[string]Benchmarker{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true},
 	},
-	"batch-100kb-largetable": batchWrite{
+	"batch-100kb-ctable-64mb": batchWrite{
+		BatchSize: 100 * 1024,
+		Options:   opt.Options{CompactionTableSize: 64 * opt.MiB},
+	},
+	"batch-100kb-ctable-64mb-nosync": batchWrite{
+		BatchSize: 100 * 1024,
+		Options:   opt.Options{NoSync: true, CompactionTableSize: 64 * opt.MiB},
+	},
+	"batch-100kb-ctable-128mb": batchWrite{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{CompactionTableSize: 128 * opt.MiB},
 	},
-	"batch-100kb-largetable-nosync": batchWrite{
+	"batch-100kb-ctable-128mb-nosync": batchWrite{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true, CompactionTableSize: 128 * opt.MiB},
 	},
-	"batch-notx-100kb": batchWrite{
+	"batch-100kb-notx": batchWrite{
 		BatchSize: 1024 * 1024,
 		Options:   opt.Options{DisableLargeBatchTransaction: true},
 	},
-	"batch-notx-1mb": batchWrite{
+	"batch-1mb-notx": batchWrite{
 		BatchSize: 1024 * 1024,
 		Options:   opt.Options{DisableLargeBatchTransaction: true},
 	},
-	"batch-notx-5mb": batchWrite{
+	"batch-5mb-notx": batchWrite{
 		BatchSize: 5 * 1024 * 1024,
 		Options:   opt.Options{DisableLargeBatchTransaction: true},
 	},
