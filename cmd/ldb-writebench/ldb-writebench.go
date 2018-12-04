@@ -22,7 +22,7 @@ func main() {
 		datasizeflag = flag.String("valuesize", "100b", "size of each value")
 		keysizeflag  = flag.String("keysize", "32b", "size of each key")
 		dirflag      = flag.String("dir", ".", "test database directory")
-		logdirflag   = flag.String("logdir", "", "test log output directory")
+		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
 
 		run []string
@@ -50,6 +50,10 @@ func main() {
 		log.Fatal("-datasize: ", err)
 	}
 	cfg.LogPercent = true
+
+	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
+		log.Fatal("can't create log dir: %v", err)
+	}
 
 	anyErr := false
 	for _, name := range run {
