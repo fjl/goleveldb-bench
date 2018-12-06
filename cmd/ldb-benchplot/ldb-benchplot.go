@@ -69,6 +69,7 @@ func plotBPS(plt *plot.Plot, reports []bench.Report) {
 	plt.X.Label.Text = "database size"
 	plt.Y.Label.Text = "write speed"
 	plt.Y.Tick.Marker = megabyteTicks{unit: "mb/s"}
+	plt.Legend.Top = true
 	addPlots(plt, reports, toBPSPlot)
 }
 
