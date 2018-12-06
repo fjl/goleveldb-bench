@@ -93,6 +93,14 @@ var tests = map[string]Benchmarker{
 	"batch-100kb":    batchWrite{BatchSize: 100 * opt.KiB},
 	"batch-1mb":      batchWrite{BatchSize: opt.MiB},
 	"batch-5mb":      batchWrite{BatchSize: 5 * opt.MiB},
+	"batch-100kb-wb-512mb-cache-1gb": batchWrite{
+		BatchSize: 100 * 1024,
+		Options: opt.Options{
+			// These settings approximate what geth is doing.
+			BlockCacheCapacity: 1024 * opt.MiB,
+			WriteBuffer:        512 * opt.MiB,
+		},
+	},
 	"batch-100kb-nosync": batchWrite{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true},
@@ -105,13 +113,13 @@ var tests = map[string]Benchmarker{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true, CompactionTableSize: 64 * opt.MiB},
 	},
-	"batch-100kb-ctable-128mb": batchWrite{
+	"batch-100kb-ctable-64mb-wb-512mb-cache-1gb": batchWrite{
 		BatchSize: 100 * 1024,
-		Options:   opt.Options{CompactionTableSize: 128 * opt.MiB},
-	},
-	"batch-100kb-ctable-128mb-nosync": batchWrite{
-		BatchSize: 100 * 1024,
-		Options:   opt.Options{NoSync: true, CompactionTableSize: 128 * opt.MiB},
+		Options: opt.Options{
+			BlockCacheCapacity:  1024 * opt.MiB,
+			WriteBuffer:         512 * opt.MiB,
+			CompactionTableSize: 64 * opt.MiB,
+		},
 	},
 	"batch-100kb-notx": batchWrite{
 		BatchSize: 1024 * 1024,
