@@ -105,6 +105,14 @@ var tests = map[string]Benchmarker{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{NoSync: true},
 	},
+	"batch-100kb-wb-512mb-cache-1gb-nosync": batchWrite{
+		BatchSize: 100 * 1024,
+		Options: opt.Options{
+			NoSync:             true,
+			BlockCacheCapacity: 1024 * opt.MiB,
+			WriteBuffer:        512 * opt.MiB,
+		},
+	},
 	"batch-100kb-ctable-64mb": batchWrite{
 		BatchSize: 100 * 1024,
 		Options:   opt.Options{CompactionTableSize: 64 * opt.MiB},
