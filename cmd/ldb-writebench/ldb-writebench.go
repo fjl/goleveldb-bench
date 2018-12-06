@@ -32,6 +32,7 @@ func main() {
 	flag.Parse()
 
 	for _, t := range strings.Split(*testflag, ",") {
+		t = strings.TrimSpace(t)
 		if tests[t] == nil {
 			log.Fatalf("unknown test %q", t)
 		}
