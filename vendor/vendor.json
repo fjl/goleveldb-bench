@@ -111,26 +111,8 @@
 			"revisionTime": "2018-01-24T22:46:53Z"
 		},
 		{
-			"checksumSHA1": "HMxFZXCChA8pcQ2YiBDJRzbRJ2o=",
-			"path": "github.com/gonum/plot",
-			"revision": "f41a315af14899563f0b47eeb58caff793260a0d",
-			"revisionTime": "2018-11-26T23:45:51Z"
-		},
-		{
-			"checksumSHA1": "VPz2ArBj5qmM/HhPlhvtIcGcC9c=",
-			"path": "github.com/gonum/plot/plotter",
-			"revision": "f41a315af14899563f0b47eeb58caff793260a0d",
-			"revisionTime": "2018-11-26T23:45:51Z"
-		},
-		{
 			"checksumSHA1": "AaVZ1ijrJQOXubbmxRW9P7xvYNU=",
 			"path": "github.com/gonum/plot/plotutil",
-			"revision": "f41a315af14899563f0b47eeb58caff793260a0d",
-			"revisionTime": "2018-11-26T23:45:51Z"
-		},
-		{
-			"checksumSHA1": "Di35qeUZeG04F+AjQMASo+M5Uwg=",
-			"path": "github.com/gonum/plot/vg",
 			"revision": "f41a315af14899563f0b47eeb58caff793260a0d",
 			"revisionTime": "2018-11-26T23:45:51Z"
 		},
