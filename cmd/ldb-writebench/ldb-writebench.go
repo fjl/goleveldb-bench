@@ -26,7 +26,7 @@ func main() {
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
 
 		run []string
-		cfg bench.Config
+		cfg bench.WriteConfig
 		err error
 	)
 	flag.Parse()
@@ -72,7 +72,7 @@ func main() {
 	}
 }
 
-func runTest(logdir, dbdir, name string, cfg bench.Config) error {
+func runTest(logdir, dbdir, name string, cfg bench.WriteConfig) error {
 	cfg.TestName = name
 	logfile, err := os.Create(filepath.Join(logdir, name+".json"))
 	if err != nil {
@@ -80,12 +80,12 @@ func runTest(logdir, dbdir, name string, cfg bench.Config) error {
 	}
 	defer logfile.Close()
 	log.Printf("== running %q", name)
-	env := bench.NewEnv(logfile, cfg)
+	env := bench.NewWriteEnv(logfile, cfg)
 	return tests[name].Benchmark(dbdir, env)
 }
 
 type Benchmarker interface {
-	Benchmark(dir string, env *bench.Env) error
+	Benchmark(dir string, env *bench.WriteEnv) error
 }
 
 var tests = map[string]Benchmarker{
@@ -147,7 +147,7 @@ var tests = map[string]Benchmarker{
 }
 
 func testnames() (n []string) {
-	for name, _ := range tests {
+	for name := range tests {
 		n = append(n, name)
 	}
 	sort.Strings(n)
@@ -158,7 +158,7 @@ type seqWrite struct {
 	Options opt.Options
 }
 
-func (b seqWrite) Benchmark(dir string, env *bench.Env) error {
+func (b seqWrite) Benchmark(dir string, env *bench.WriteEnv) error {
 	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
@@ -178,7 +178,7 @@ type batchWrite struct {
 	BatchSize int
 }
 
-func (b batchWrite) Benchmark(dir string, env *bench.Env) error {
+func (b batchWrite) Benchmark(dir string, env *bench.WriteEnv) error {
 	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
@@ -210,7 +210,7 @@ type concurrentWrite struct {
 	NoWriteMerge bool
 }
 
-func (b concurrentWrite) Benchmark(dir string, env *bench.Env) error {
+func (b concurrentWrite) Benchmark(dir string, env *bench.WriteEnv) error {
 	db, err := leveldb.OpenFile(dir, &b.Options)
 	if err != nil {
 		return err
