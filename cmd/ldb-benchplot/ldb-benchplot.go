@@ -8,9 +8,9 @@ import (
 	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
-	"github.com/gonum/plot/plotutil"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
 )
 
@@ -58,7 +58,7 @@ func reduceEvents(events []bench.Progress, n int) []bench.Progress {
 		end := len(grouped) - 1
 		grouped[end].Delta += ev.Delta
 		grouped[end].Duration += ev.Duration
-		grouped[end].Written = ev.Written
+		grouped[end].Processed = ev.Processed
 	}
 	return grouped
 }
@@ -67,7 +67,7 @@ func reduceEvents(events []bench.Progress, n int) []bench.Progress {
 func plotBPS(plt *plot.Plot, reports []bench.Report) {
 	plt.X.Tick.Marker = megabyteTicks{unit: "mb"}
 	plt.X.Label.Text = "database size"
-	plt.Y.Label.Text = "write speed"
+	plt.Y.Label.Text = "speed"
 	plt.Y.Tick.Marker = megabyteTicks{unit: "mb/s"}
 	plt.Legend.Top = true
 	addPlots(plt, reports, toBPSPlot)
@@ -76,7 +76,7 @@ func plotBPS(plt *plot.Plot, reports []bench.Report) {
 // plotAbsTime adds time/size plots for all reports.
 func plotAbsTime(plt *plot.Plot, reports []bench.Report) {
 	plt.X.Label.Text = "time (s)"
-	plt.Y.Label.Text = "database size"
+	plt.Y.Label.Text = "processed size"
 	plt.Y.Tick.Marker = megabyteTicks{unit: "mb"}
 	addPlots(plt, reports, toAbsTimePlot)
 }
@@ -100,7 +100,7 @@ func addPlots(plt *plot.Plot, reports []bench.Report, toXY xyFunc) {
 	}
 }
 
-// bpsPlot plots X = db size against Y = bytes per second written.
+// bpsPlot plots X = db size against Y = bytes per second processed
 type bpsPlot []bench.Progress
 
 func toBPSPlot(events []bench.Progress) plotter.XYer {
@@ -112,7 +112,7 @@ func (p bpsPlot) Len() int {
 }
 
 func (p bpsPlot) XY(i int) (float64, float64) {
-	x := float64(p[i].Written)
+	x := float64(p[i].Processed)
 	return x, p[i].BPS()
 }
 
@@ -133,7 +133,7 @@ func (p absTimePlot) Len() int {
 }
 
 func (p absTimePlot) XY(i int) (float64, float64) {
-	return float64(p[i].Duration / time.Second), float64(p[i].Written)
+	return float64(p[i].Duration / time.Second), float64(p[i].Processed)
 }
 
 // megabyteTicks emits axis labels corresponding to megabytes written.
