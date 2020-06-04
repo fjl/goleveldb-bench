@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -24,6 +25,7 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
+		pprofCPUflag = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
 
 		run []string
 		cfg bench.WriteConfig
@@ -59,7 +61,7 @@ func main() {
 	anyErr := false
 	for _, name := range run {
 		dbdir := filepath.Join(*dirflag, "testdb-"+name)
-		if err := runTest(*logdirflag, dbdir, name, cfg); err != nil {
+		if err := runTest(*logdirflag, dbdir, name, *pprofCPUflag, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
 			anyErr = true
 		}
@@ -72,15 +74,24 @@ func main() {
 	}
 }
 
-func runTest(logdir, dbdir, name string, cfg bench.WriteConfig) error {
+func runTest(logdir, dbdir, name string, pprofCPU bool, cfg bench.WriteConfig) error {
 	cfg.TestName = name
-	logfile, err := os.Create(filepath.Join(logdir, name+".json"))
+	logfile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".json"))
 	if err != nil {
 		return err
 	}
 	defer logfile.Close()
+
 	log.Printf("== running %q", name)
 	env := bench.NewWriteEnv(logfile, cfg)
+	if pprofCPU {
+		cpufile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".cpu"))
+		if err != nil {
+			return err
+		}
+		defer cpufile.Close()
+		env = env.WithCPUProfiler(cpufile)
+	}
 	return tests[name].Benchmark(dbdir, env)
 }
 

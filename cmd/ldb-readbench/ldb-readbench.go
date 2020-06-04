@@ -25,6 +25,7 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
+		pprofCPUflag = flag.Bool("pprof.cpu", false, "enable cpu performance profiling(read procedure only)")
 
 		run []string
 		cfg bench.ReadConfig
@@ -76,7 +77,7 @@ func main() {
 		if err := os.MkdirAll(dbdir, 0755); err != nil {
 			log.Fatal("can't create keyfile dir: %v", err)
 		}
-		if err := runTest(*logdirflag, dbdir, name, createdb, cfg); err != nil {
+		if err := runTest(*logdirflag, dbdir, name, createdb, *pprofCPUflag, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
 			anyErr = true
 		}
@@ -89,7 +90,7 @@ func main() {
 	}
 }
 
-func runTest(logdir, dbdir, name string, createdb bool, cfg bench.ReadConfig) error {
+func runTest(logdir, dbdir, name string, createdb bool, pprofCPU bool, cfg bench.ReadConfig) error {
 	cfg.TestName = name
 	logfile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".json"))
 	if err != nil {
@@ -124,6 +125,14 @@ func runTest(logdir, dbdir, name string, createdb bool, cfg bench.ReadConfig) er
 
 	log.Printf("== running %q", name)
 	env := bench.NewReadEnv(logfile, kr, kw, reset, cfg)
+	if pprofCPU {
+		cpufile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".cpu"))
+		if err != nil {
+			return err
+		}
+		defer cpufile.Close()
+		env = env.WithCPUProfiler(cpufile)
+	}
 	return tests[name].Benchmark(dbdir, env)
 }
 
