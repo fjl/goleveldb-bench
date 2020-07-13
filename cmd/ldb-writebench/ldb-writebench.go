@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,7 +29,11 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
-		pprofCPUflag = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
+
+		// PProf related flags
+		pprofCPUflag  = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
+		pprofAddrFlag = flag.String("pprof.addr", "", "pprof server listening interface(empty = disabled)")
+		pprofPortFlag = flag.Int("pprof.port", 6060, "tcp port number on which to start pprof server(0 = random)")
 
 		run []string
 		cfg bench.WriteConfig
@@ -53,6 +61,20 @@ func main() {
 		log.Fatal("-datasize: ", err)
 	}
 	cfg.LogPercent = true
+
+	// Setup pprof web interface if required.
+	if *pprofAddrFlag != "" {
+		endpoint := fmt.Sprintf("%v:%d", *pprofAddrFlag, *pprofPortFlag)
+		go func() {
+			l, err := net.Listen("tcp", endpoint)
+			if err != nil {
+				log.Println("Failed to start pprof server")
+				return
+			}
+			log.Println("PProf web interface opened", "endpoint", l.Addr().(*net.TCPAddr))
+			fmt.Println(http.Serve(l, nil))
+		}()
+	}
 
 	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
 		log.Fatal("can't create log dir: %v", err)
@@ -195,7 +217,6 @@ func (b batchWrite) Benchmark(dir string, env *bench.WriteEnv) error {
 		return err
 	}
 	defer db.Close()
-
 	batch := new(leveldb.Batch)
 	bsize := 0
 	return env.Run(func(key, value string, lastCall bool) error {

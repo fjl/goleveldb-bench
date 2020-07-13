@@ -2,8 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,7 +29,11 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
-		pprofCPUflag = flag.Bool("pprof.cpu", false, "enable cpu performance profiling(read procedure only)")
+
+		// PProf related flags
+		pprofCPUflag  = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
+		pprofAddrFlag = flag.String("pprof.addr", "", "pprof server listening interface(empty = disabled)")
+		pprofPortFlag = flag.Int("pprof.port", 6060, "tcp port number on which to start pprof server(0 = random)")
 
 		run []string
 		cfg bench.ReadConfig
@@ -55,6 +63,20 @@ func main() {
 
 	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
 		log.Fatal("can't create log dir: %v", err)
+	}
+
+	// Setup pprof web interface if required.
+	if *pprofAddrFlag != "" {
+		endpoint := fmt.Sprintf("%v:%d", *pprofAddrFlag, *pprofPortFlag)
+		go func() {
+			l, err := net.Listen("tcp", endpoint)
+			if err != nil {
+				log.Println("Failed to start pprof server")
+				return
+			}
+			log.Println("PProf web interface opened", "endpoint", l.Addr().(*net.TCPAddr))
+			fmt.Println(http.Serve(l, nil))
+		}()
 	}
 
 	anyErr := false
@@ -118,13 +140,13 @@ func runTest(logdir, dbdir, name string, createdb bool, pprofCPU bool, cfg bench
 		}
 		defer keyfile.Close()
 		kw, kr = keyfile, keyfile
-		reset = func() {
-			keyfile.Seek(0, io.SeekStart)
-		}
+		reset = func() {keyfile.Seek(0, io.SeekStart)}
 	}
 
 	log.Printf("== running %q", name)
 	env := bench.NewReadEnv(logfile, kr, kw, reset, cfg)
+
+	// Setup cpu profiling writer if required
 	if pprofCPU {
 		cpufile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".cpu"))
 		if err != nil {
@@ -146,11 +168,22 @@ var tests = map[string]Benchmarker{
 		Filter: filter.NewBloomFilter(10),
 	}},
 	"random-read-bigcache": randomRead{Options: opt.Options{
-		BlockCacheCapacity: 100 * opt.MiB,
+		BlockCacheCapacity:     100 * opt.MiB,
 	}},
 	"random-read-bigcache-filter": randomRead{Options: opt.Options{
-		BlockCacheCapacity: 100 * opt.MiB,
-		Filter:             filter.NewBloomFilter(10),
+		BlockCacheCapacity:     100 * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+	}},
+	"random-read-bigcache-filter-no-seekcomp": randomRead{Options: opt.Options{
+		BlockCacheCapacity:     100 * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+		DisableSeeksCompaction: true,
+	}},
+	"random-read-bigcache-filter-no-seekcomp-filecache": randomRead{Options: opt.Options{
+		BlockCacheCapacity:     100 * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+		DisableSeeksCompaction: true,
+		OpenFilesCacheCapacity: 10000, // Need to raise the allowance in OS
 	}},
 }
 
