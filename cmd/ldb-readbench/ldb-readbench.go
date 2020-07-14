@@ -140,7 +140,7 @@ func runTest(logdir, dbdir, name string, createdb bool, pprofCPU bool, cfg bench
 		}
 		defer keyfile.Close()
 		kw, kr = keyfile, keyfile
-		reset = func() {keyfile.Seek(0, io.SeekStart)}
+		reset = func() { keyfile.Seek(0, io.SeekStart) }
 	}
 
 	log.Printf("== running %q", name)
@@ -168,11 +168,11 @@ var tests = map[string]Benchmarker{
 		Filter: filter.NewBloomFilter(10),
 	}},
 	"random-read-bigcache": randomRead{Options: opt.Options{
-		BlockCacheCapacity:     100 * opt.MiB,
+		BlockCacheCapacity: 100 * opt.MiB,
 	}},
 	"random-read-bigcache-filter": randomRead{Options: opt.Options{
-		BlockCacheCapacity:     100 * opt.MiB,
-		Filter:                 filter.NewBloomFilter(10),
+		BlockCacheCapacity: 100 * opt.MiB,
+		Filter:             filter.NewBloomFilter(10),
 	}},
 	"random-read-bigcache-filter-no-seekcomp": randomRead{Options: opt.Options{
 		BlockCacheCapacity:     100 * opt.MiB,
