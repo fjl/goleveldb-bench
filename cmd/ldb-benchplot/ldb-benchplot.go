@@ -65,8 +65,7 @@ func reduceEvents(events []bench.Progress, n int) []bench.Progress {
 
 // plotBPS adds BPS vs. database size plots for all reports.
 func plotBPS(plt *plot.Plot, reports []bench.Report) {
-	plt.X.Tick.Marker = megabyteTicks{unit: "mb"}
-	plt.X.Label.Text = "database size"
+	plt.X.Label.Text = "time (s)"
 	plt.Y.Label.Text = "speed"
 	plt.Y.Tick.Marker = megabyteTicks{unit: "mb/s"}
 	plt.Legend.Top = true
@@ -100,11 +99,24 @@ func addPlots(plt *plot.Plot, reports []bench.Report, toXY xyFunc) {
 	}
 }
 
-// bpsPlot plots X = db size against Y = bytes per second processed
-type bpsPlot []bench.Progress
+type bpsProgress struct {
+	bench.Progress
+	TotalDuration time.Duration
+}
+
+// bpsPlot plots X = time, against Y = bytes per second processed
+type bpsPlot []bpsProgress
 
 func toBPSPlot(events []bench.Progress) plotter.XYer {
-	return bpsPlot(events)
+	rendered := make([]bpsProgress, len(events))
+	for i := range events {
+		if i == 0 {
+			rendered[i] = bpsProgress{events[i], events[i].Duration}
+		} else {
+			rendered[i] = bpsProgress{events[i], rendered[i-1].TotalDuration + events[i].Duration}
+		}
+	}
+	return bpsPlot(rendered)
 }
 
 func (p bpsPlot) Len() int {
@@ -112,8 +124,7 @@ func (p bpsPlot) Len() int {
 }
 
 func (p bpsPlot) XY(i int) (float64, float64) {
-	x := float64(p[i].Processed)
-	return x, p[i].BPS()
+	return float64(p[i].TotalDuration / time.Second), p[i].BPS()
 }
 
 // absTimePlot plots X = time against Y = bytes written.

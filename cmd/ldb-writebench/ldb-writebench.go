@@ -3,11 +3,16 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -24,6 +29,11 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
+
+		// PProf related flags
+		pprofCPUflag  = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
+		pprofAddrFlag = flag.String("pprof.addr", "", "pprof server listening interface(empty = disabled)")
+		pprofPortFlag = flag.Int("pprof.port", 6060, "tcp port number on which to start pprof server(0 = random)")
 
 		run []string
 		cfg bench.WriteConfig
@@ -52,6 +62,20 @@ func main() {
 	}
 	cfg.LogPercent = true
 
+	// Setup pprof web interface if required.
+	if *pprofAddrFlag != "" {
+		endpoint := fmt.Sprintf("%v:%d", *pprofAddrFlag, *pprofPortFlag)
+		go func() {
+			l, err := net.Listen("tcp", endpoint)
+			if err != nil {
+				log.Println("Failed to start pprof server")
+				return
+			}
+			log.Println("PProf web interface opened", "endpoint", l.Addr().(*net.TCPAddr))
+			fmt.Println(http.Serve(l, nil))
+		}()
+	}
+
 	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
 		log.Fatal("can't create log dir: %v", err)
 	}
@@ -59,7 +83,7 @@ func main() {
 	anyErr := false
 	for _, name := range run {
 		dbdir := filepath.Join(*dirflag, "testdb-"+name)
-		if err := runTest(*logdirflag, dbdir, name, cfg); err != nil {
+		if err := runTest(*logdirflag, dbdir, name, *pprofCPUflag, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
 			anyErr = true
 		}
@@ -72,15 +96,24 @@ func main() {
 	}
 }
 
-func runTest(logdir, dbdir, name string, cfg bench.WriteConfig) error {
+func runTest(logdir, dbdir, name string, pprofCPU bool, cfg bench.WriteConfig) error {
 	cfg.TestName = name
-	logfile, err := os.Create(filepath.Join(logdir, name+".json"))
+	logfile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".json"))
 	if err != nil {
 		return err
 	}
 	defer logfile.Close()
+
 	log.Printf("== running %q", name)
 	env := bench.NewWriteEnv(logfile, cfg)
+	if pprofCPU {
+		cpufile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".cpu"))
+		if err != nil {
+			return err
+		}
+		defer cpufile.Close()
+		env = env.WithCPUProfiler(cpufile)
+	}
 	return tests[name].Benchmark(dbdir, env)
 }
 
@@ -184,7 +217,6 @@ func (b batchWrite) Benchmark(dir string, env *bench.WriteEnv) error {
 		return err
 	}
 	defer db.Close()
-
 	batch := new(leveldb.Batch)
 	bsize := 0
 	return env.Run(func(key, value string, lastCall bool) error {

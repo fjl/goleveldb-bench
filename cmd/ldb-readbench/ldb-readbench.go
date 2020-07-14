@@ -2,8 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
+	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,6 +29,11 @@ func main() {
 		dirflag      = flag.String("dir", ".", "test database directory")
 		logdirflag   = flag.String("logdir", ".", "test log output directory")
 		deletedbflag = flag.Bool("deletedb", false, "delete databases after test run")
+
+		// PProf related flags
+		pprofCPUflag  = flag.Bool("pprof.cpu", false, "enable cpu performance profiling")
+		pprofAddrFlag = flag.String("pprof.addr", "", "pprof server listening interface(empty = disabled)")
+		pprofPortFlag = flag.Int("pprof.port", 6060, "tcp port number on which to start pprof server(0 = random)")
 
 		run []string
 		cfg bench.ReadConfig
@@ -56,6 +65,20 @@ func main() {
 		log.Fatal("can't create log dir: %v", err)
 	}
 
+	// Setup pprof web interface if required.
+	if *pprofAddrFlag != "" {
+		endpoint := fmt.Sprintf("%v:%d", *pprofAddrFlag, *pprofPortFlag)
+		go func() {
+			l, err := net.Listen("tcp", endpoint)
+			if err != nil {
+				log.Println("Failed to start pprof server")
+				return
+			}
+			log.Println("PProf web interface opened", "endpoint", l.Addr().(*net.TCPAddr))
+			fmt.Println(http.Serve(l, nil))
+		}()
+	}
+
 	anyErr := false
 	for _, name := range run {
 		var (
@@ -76,7 +99,7 @@ func main() {
 		if err := os.MkdirAll(dbdir, 0755); err != nil {
 			log.Fatal("can't create keyfile dir: %v", err)
 		}
-		if err := runTest(*logdirflag, dbdir, name, createdb, cfg); err != nil {
+		if err := runTest(*logdirflag, dbdir, name, createdb, *pprofCPUflag, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
 			anyErr = true
 		}
@@ -89,7 +112,7 @@ func main() {
 	}
 }
 
-func runTest(logdir, dbdir, name string, createdb bool, cfg bench.ReadConfig) error {
+func runTest(logdir, dbdir, name string, createdb bool, pprofCPU bool, cfg bench.ReadConfig) error {
 	cfg.TestName = name
 	logfile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".json"))
 	if err != nil {
@@ -117,13 +140,21 @@ func runTest(logdir, dbdir, name string, createdb bool, cfg bench.ReadConfig) er
 		}
 		defer keyfile.Close()
 		kw, kr = keyfile, keyfile
-		reset = func() {
-			keyfile.Seek(0, io.SeekStart)
-		}
+		reset = func() { keyfile.Seek(0, io.SeekStart) }
 	}
 
 	log.Printf("== running %q", name)
 	env := bench.NewReadEnv(logfile, kr, kw, reset, cfg)
+
+	// Setup cpu profiling writer if required
+	if pprofCPU {
+		cpufile, err := os.Create(filepath.Join(logdir, name+time.Now().Format(".2006-01-02-15:04:05")+".cpu"))
+		if err != nil {
+			return err
+		}
+		defer cpufile.Close()
+		env = env.WithCPUProfiler(cpufile)
+	}
 	return tests[name].Benchmark(dbdir, env)
 }
 
@@ -142,6 +173,17 @@ var tests = map[string]Benchmarker{
 	"random-read-bigcache-filter": randomRead{Options: opt.Options{
 		BlockCacheCapacity: 100 * opt.MiB,
 		Filter:             filter.NewBloomFilter(10),
+	}},
+	"random-read-bigcache-filter-no-seekcomp": randomRead{Options: opt.Options{
+		BlockCacheCapacity:     100 * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+		DisableSeeksCompaction: true,
+	}},
+	"random-read-bigcache-filter-no-seekcomp-filecache": randomRead{Options: opt.Options{
+		BlockCacheCapacity:     100 * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+		DisableSeeksCompaction: true,
+		OpenFilesCacheCapacity: 10000, // Need to raise the allowance in OS
 	}},
 }
 

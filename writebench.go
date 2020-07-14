@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -31,6 +32,8 @@ type WriteEnv struct {
 	startTime, lastTime  time.Duration
 	written, lastWritten uint64
 	lastPercent          int
+	// profile options
+	cpuw io.Writer // Non-nil if cpu profile is enabled
 }
 
 func NewWriteEnv(output io.Writer, cfg WriteConfig) *WriteEnv {
@@ -42,10 +45,19 @@ func NewWriteEnv(output io.Writer, cfg WriteConfig) *WriteEnv {
 	}
 }
 
+func (env *WriteEnv) WithCPUProfiler(writer io.Writer) *WriteEnv {
+	env.cpuw = writer
+	return env
+}
+
 // Run calls write repeatedly with random keys and values.
 // The write function should perform a database write and call LegacyWriteProgress when
 // data has actually been flushed to disk.
 func (env *WriteEnv) Run(write func(key, value string, lastCall bool) error) error {
+	if env.cpuw != nil {
+		pprof.StartCPUProfile(env.cpuw)
+		defer pprof.StopCPUProfile()
+	}
 	env.start()
 	written := uint64(0)
 	for {

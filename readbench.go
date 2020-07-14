@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"runtime/pprof"
 	"sync"
 	"time"
 )
@@ -38,6 +39,9 @@ type ReadEnv struct {
 
 	written, lastWritten uint64
 	lastWrittenPercent   int
+
+	// profile options
+	cpuw io.Writer // Non-nil if cpu profile is enabled
 }
 
 func NewReadEnv(log io.Writer, kr io.Reader, kw io.Writer, resetKey func(), cfg ReadConfig) *ReadEnv {
@@ -51,6 +55,11 @@ func NewReadEnv(log io.Writer, kr io.Reader, kw io.Writer, resetKey func(), cfg 
 		value:    make([]byte, cfg.DataSize),
 		keych:    make(chan [][]byte, 100),
 	}
+}
+
+func (env *ReadEnv) WithCPUProfiler(writer io.Writer) *ReadEnv {
+	env.cpuw = writer
+	return env
 }
 
 // Run calls write repeatedly with random keys and values.
@@ -109,6 +118,10 @@ func (env *ReadEnv) Run(write func(key, value string, lastCall bool) error, read
 	wg.Add(1)
 	go env.readKey(result, shutdown, &wg)
 
+	if env.cpuw != nil {
+		pprof.StartCPUProfile(env.cpuw)
+		defer pprof.StopCPUProfile()
+	}
 stageTwo:
 	for keybatch := range result {
 		for _, key := range keybatch {
