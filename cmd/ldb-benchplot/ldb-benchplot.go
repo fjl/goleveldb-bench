@@ -26,10 +26,7 @@ func main() {
 		log.Fatal("-out is required")
 	}
 	reports := bench.MustReadReports(flag.Args())
-	plt, err := plot.New()
-	if err != nil {
-		log.Fatal(err)
-	}
+	plt := plot.New()
 	switch *plotType {
 	case "bps":
 		plotBPS(plt, reports)

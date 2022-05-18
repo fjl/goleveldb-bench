@@ -6,7 +6,7 @@ import (
 	"time"
 
 	bench "github.com/fjl/goleveldb-bench"
-	"github.com/gonum/stat"
+	"gonum.org/v1/gonum/stat"
 )
 
 func main() {
