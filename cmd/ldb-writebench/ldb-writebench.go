@@ -53,7 +53,7 @@ func main() {
 	cfg.LogPercent = true
 
 	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
-		log.Fatal("can't create log dir: %v", err)
+		log.Fatal("can't create log dir: ", err)
 	}
 
 	anyErr := false
