@@ -53,7 +53,7 @@ func main() {
 	cfg.LogPercent = true
 
 	if err := os.MkdirAll(*logdirflag, 0755); err != nil {
-		log.Fatal("can't create log dir: %v", err)
+		log.Fatalf("can't create log dir: %v", err)
 	}
 
 	anyErr := false
@@ -74,7 +74,7 @@ func main() {
 			dbdir, createdb = filepath.Join(*dirflag, "testdb-"+name), true
 		}
 		if err := os.MkdirAll(dbdir, 0755); err != nil {
-			log.Fatal("can't create keyfile dir: %v", err)
+			log.Fatal("can't create keyfile dir: ", err)
 		}
 		if err := runTest(*logdirflag, dbdir, name, createdb, cfg); err != nil {
 			log.Printf("test %q failed: %v", name, err)
